@@ -1,0 +1,808 @@
+{% extends "base.html" %}
+{% block title %}ML Grade Predictor{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── Layout ─────────────────────────────────────────────────── */
+.predictor-grid {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 992px) { .predictor-grid { grid-template-columns: 1fr; } }
+
+/* ── Panel Card ─────────────────────────────────────────────── */
+.panel-card {
+  background: var(--surface);
+  border-radius: 16px;
+  border: 1px solid var(--border-soft);
+  box-shadow: 0 2px 12px rgba(0,0,0,.06);
+  overflow: hidden;
+}
+.panel-header {
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--border-soft);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.panel-header h5 { margin: 0; font-size: 14px; font-weight: 700; color: var(--text-primary); }
+.panel-body { padding: 22px; }
+[data-bs-theme="dark"] .panel-card { border-color: var(--border); }
+[data-bs-theme="dark"] .panel-header { border-bottom-color: var(--border); }
+
+/* ── Train Section ───────────────────────────────────────────── */
+.train-hero {
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+  border-radius: 16px; padding: 40px 32px;
+  text-align: center; color: #fff;
+  position: relative; overflow: hidden;
+  border: 1px solid rgba(99,102,241,.2);
+}
+.train-hero::before {
+  content: ''; position: absolute;
+  width: 300px; height: 300px; border-radius: 50%;
+  background: rgba(99,102,241,.08);
+  top: -120px; right: -60px;
+}
+.train-hero::after {
+  content: ''; position: absolute;
+  width: 200px; height: 200px; border-radius: 50%;
+  background: rgba(16,185,129,.06);
+  bottom: -80px; left: 10%;
+}
+.train-hero-content { position: relative; z-index: 1; }
+.train-icon { font-size: 64px; margin-bottom: 16px; }
+.train-hero h2 { font-size: 28px; font-weight: 900; letter-spacing: -.4px; margin-bottom: 8px; }
+.train-hero p { color: rgba(255,255,255,.55); font-size: 14px; max-width: 480px; margin: 0 auto 28px; }
+
+.train-btn {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff; border: none; border-radius: 12px;
+  padding: 14px 36px; font-size: 15px; font-weight: 700;
+  cursor: pointer; transition: all .2s;
+  box-shadow: 0 4px 20px rgba(99,102,241,.4);
+}
+.train-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(99,102,241,.5); }
+.train-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+
+.train-stats {
+  display: flex; justify-content: center; gap: 32px;
+  margin-top: 28px; flex-wrap: wrap;
+}
+.train-stat { text-align: center; }
+.train-stat-val { font-size: 28px; font-weight: 900; color: #a5b4fc; }
+.train-stat-label { font-size: 12px; color: rgba(255,255,255,.45); margin-top: 3px; font-weight: 600; letter-spacing: .3px; }
+
+/* Progress bar (training) */
+.train-progress { display: none; margin-top: 20px; }
+.train-progress-bar {
+  height: 6px; background: rgba(255,255,255,.1); border-radius: 99px; overflow: hidden;
+}
+.train-progress-fill {
+  height: 100%; border-radius: 99px;
+  background: linear-gradient(90deg, #6366f1, #10b981);
+  width: 0%; transition: width .4s ease;
+  animation: pulse-bar 1.5s ease-in-out infinite;
+}
+@keyframes pulse-bar {
+  0%, 100% { opacity: 1; } 50% { opacity: .7; }
+}
+.train-log { margin-top: 12px; font-size: 12px; color: rgba(255,255,255,.5); font-family: monospace; }
+
+/* ── Metrics Cards ───────────────────────────────────────────── */
+.metric-card {
+  background: var(--surface-2); border-radius: 12px; padding: 16px;
+  text-align: center; border: 1px solid var(--border-soft);
+  transition: transform .2s;
+}
+.metric-card:hover { transform: translateY(-2px); }
+.metric-val { font-size: 24px; font-weight: 900; letter-spacing: -.5px; }
+.metric-label { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; margin-top: 4px; }
+.metric-help { font-size: 10px; color: var(--text-muted); margin-top: 3px; }
+
+/* ── Sliders ─────────────────────────────────────────────────── */
+.slider-group { margin-bottom: 22px; }
+.slider-label { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+.slider-label-text { font-size: 13px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+.slider-value-badge {
+  font-size: 13px; font-weight: 800; padding: 3px 12px;
+  border-radius: 20px; min-width: 52px; text-align: center;
+}
+.badge-att  { background: rgba(16,185,129,.15); color: #059669; }
+.badge-mid  { background: rgba(59,130,246,.15);  color: #2563eb; }
+.badge-gpa  { background: rgba(245,158,11,.15);  color: #d97706; }
+[data-bs-theme="dark"] .badge-att  { background: rgba(16,185,129,.2); color: #34d399; }
+[data-bs-theme="dark"] .badge-mid  { background: rgba(59,130,246,.2); color: #60a5fa; }
+[data-bs-theme="dark"] .badge-gpa  { background: rgba(245,158,11,.2); color: #fbbf24; }
+.form-range { accent-color: var(--indigo); }
+.slider-range-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+/* ── Impact bars ─────────────────────────────────────────────── */
+.impact-row { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; font-size: 12px; }
+.impact-name { width: 70px; color: var(--text-muted); font-weight: 600; }
+.impact-bar-track { flex: 1; height: 6px; background: var(--border-soft); border-radius: 99px; overflow: hidden; }
+.impact-bar-fill  { height: 100%; border-radius: 99px; }
+.impact-pct { width: 36px; text-align: right; font-weight: 700; font-size: 11px; color: var(--text-secondary); }
+
+/* ── Gauge ───────────────────────────────────────────────────── */
+.gauge-wrap { position: relative; width: 220px; height: 120px; margin: 0 auto 8px; }
+.gauge-wrap canvas { display: block; }
+.gauge-text { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); text-align: center; }
+.gauge-score { font-size: 42px; font-weight: 900; line-height: 1; letter-spacing: -1px; transition: color .4s; }
+.gauge-label { font-size: 11px; color: var(--text-muted); font-weight: 600; letter-spacing: .4px; text-transform: uppercase; }
+
+/* ── Result ──────────────────────────────────────────────────── */
+.result-hero { text-align: center; padding: 28px 22px 20px; border-bottom: 1px solid var(--border-soft); }
+[data-bs-theme="dark"] .result-hero { border-bottom-color: var(--border); }
+.letter-grade {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 64px; height: 64px; border-radius: 18px;
+  font-size: 28px; font-weight: 900; margin: 0 auto 10px; transition: all .4s ease;
+}
+.grade-A { background: rgba(16,185,129,.15); color: #059669; border: 2px solid rgba(16,185,129,.3); }
+.grade-B { background: rgba(59,130,246,.15);  color: #2563eb; border: 2px solid rgba(59,130,246,.3); }
+.grade-C { background: rgba(245,158,11,.15);  color: #d97706; border: 2px solid rgba(245,158,11,.3); }
+.grade-D { background: rgba(239,68,68,.12);   color: #dc2626; border: 2px solid rgba(239,68,68,.25); }
+.grade-F { background: rgba(239,68,68,.2);    color: #b91c1c; border: 2px solid rgba(239,68,68,.4); }
+[data-bs-theme="dark"] .grade-A { background: rgba(16,185,129,.2); color: #34d399; }
+[data-bs-theme="dark"] .grade-B { background: rgba(59,130,246,.2); color: #60a5fa; }
+[data-bs-theme="dark"] .grade-C { background: rgba(245,158,11,.2); color: #fbbf24; }
+[data-bs-theme="dark"] .grade-D { background: rgba(239,68,68,.18); color: #f87171; }
+[data-bs-theme="dark"] .grade-F { background: rgba(239,68,68,.25); color: #fca5a5; }
+
+.risk-banner {
+  border-radius: 10px; padding: 10px 16px; font-size: 13px; font-weight: 600;
+  display: flex; align-items: center; gap: 8px; transition: all .3s;
+}
+.risk-safe       { background: rgba(16,185,129,.1); color: #065f46; border: 1px solid rgba(16,185,129,.2); }
+.risk-borderline { background: rgba(245,158,11,.1); color: #78350f; border: 1px solid rgba(245,158,11,.2); }
+.risk-at_risk    { background: rgba(239,68,68,.1);  color: #7f1d1d; border: 1px solid rgba(239,68,68,.2); }
+[data-bs-theme="dark"] .risk-safe       { color: #6ee7b7; }
+[data-bs-theme="dark"] .risk-borderline { color: #fcd34d; }
+[data-bs-theme="dark"] .risk-at_risk    { color: #fca5a5; }
+
+/* ── Breakdown ───────────────────────────────────────────────── */
+.breakdown-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 22px; border-bottom: 1px solid var(--border-soft); font-size: 13px;
+}
+.breakdown-row:last-child { border-bottom: none; }
+[data-bs-theme="dark"] .breakdown-row { border-bottom-color: var(--border); }
+.breakdown-label { color: var(--text-muted); font-weight: 500; display: flex; align-items: center; gap: 7px; }
+.breakdown-val { font-weight: 800; font-size: 14px; color: var(--text-primary); }
+.breakdown-contribution { font-size: 11px; color: var(--text-muted); }
+.breakdown-total { background: var(--surface-2); }
+.breakdown-total .breakdown-label { color: var(--text-primary); font-weight: 700; }
+.breakdown-total .breakdown-val { font-size: 18px; color: var(--indigo); }
+
+/* ── Tips ────────────────────────────────────────────────────── */
+.tip-item {
+  display: flex; gap: 10px; padding: 11px 14px; border-radius: 8px;
+  font-size: 12.5px; line-height: 1.4; margin-bottom: 6px; border-left: 3px solid;
+}
+.tip-success { background: rgba(16,185,129,.07);  border-color: #10b981; }
+.tip-warning { background: rgba(245,158,11,.07);  border-color: #f59e0b; }
+.tip-danger  { background: rgba(239,68,68,.07);   border-color: #ef4444; }
+
+/* ── What-if table ───────────────────────────────────────────── */
+.whatif-table td, .whatif-table th { font-size: 12.5px; padding: 8px 14px; vertical-align: middle; }
+.whatif-table th { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); }
+
+/* ── Model badge ─────────────────────────────────────────────── */
+.model-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px;
+}
+.model-badge-trained   { background: rgba(16,185,129,.1); color: #059669; border: 1px solid rgba(16,185,129,.2); }
+.model-badge-untrained { background: rgba(239,68,68,.1);  color: #dc2626; border: 1px solid rgba(239,68,68,.2); }
+
+/* ── Success toast ───────────────────────────────────────────── */
+.train-success {
+  background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.3);
+  border-radius: 12px; padding: 16px 20px; margin-top: 16px;
+  color: #065f46; display: none;
+}
+[data-bs-theme="dark"] .train-success { color: #6ee7b7; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-4">
+  <div>
+    <h1 class="page-title"><i class="bi bi-cpu me-2" style="color:var(--indigo)"></i>Grade Predictor</h1>
+    <p class="page-subtitle">Linear Regression AI — predicts your final exam score from attendance, midterm &amp; GPA</p>
+  </div>
+  <div class="d-flex align-items-center gap-2" id="statusBadges">
+    {% if model_info.is_trained %}
+      <span class="model-badge model-badge-trained"><i class="bi bi-check-circle-fill"></i> Model Ready</span>
+      {% if model_info.metrics %}
+      <span class="model-badge" style="background:rgba(99,102,241,.1);color:var(--indigo);border:1px solid rgba(99,102,241,.2);">
+        <i class="bi bi-graph-up"></i> R² {{ model_info.metrics.r2 }}
+      </span>
+      {% endif %}
+    {% else %}
+      <span class="model-badge model-badge-untrained"><i class="bi bi-exclamation-circle-fill"></i> Not Trained</span>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     SECTION 1 — Training Panel (always visible to admin)
+════════════════════════════════════════════════════════════ -->
+{% if user.role == 'admin' %}
+<div class="train-hero mb-4" id="trainSection">
+  <div class="train-hero-content">
+    <div class="train-icon">🤖</div>
+    <h2 id="trainTitle">{% if model_info.is_trained %}Retrain ML Model{% else %}Train ML Model{% endif %}</h2>
+    <p id="trainDesc">
+      {% if model_info.is_trained %}
+        Model is currently trained and active. You can retrain it on the latest data to improve accuracy.
+      {% else %}
+        The Linear Regression model needs to be trained on your student grade data before predictions can be made.
+      {% endif %}
+    </p>
+
+    <div class="train-stats" id="trainStats">
+      <div class="train-stat">
+        <div class="train-stat-val" id="statGrades">{{ model_info.metrics.training_samples|default:"—" }}</div>
+        <div class="train-stat-label">Training Samples</div>
+      </div>
+      <div class="train-stat">
+        <div class="train-stat-val" id="statR2">{% if model_info.metrics %}{{ model_info.metrics.r2 }}{% else %}—{% endif %}</div>
+        <div class="train-stat-label">R² Accuracy</div>
+      </div>
+      <div class="train-stat">
+        <div class="train-stat-val" id="statRMSE">{% if model_info.metrics %}{{ model_info.metrics.rmse }}{% else %}—{% endif %}</div>
+        <div class="train-stat-label">RMSE Error</div>
+      </div>
+      <div class="train-stat">
+        <div class="train-stat-val">LinearReg</div>
+        <div class="train-stat-label">Algorithm</div>
+      </div>
+    </div>
+
+    <!-- Train buttons -->
+    <div class="mt-4 d-flex justify-content-center gap-3 flex-wrap">
+      {% if not model_info.is_trained %}
+      <button class="train-btn" id="trainBtn" onclick="trainModel(false)">
+        <i class="bi bi-play-circle-fill me-2"></i>Train Model Now
+      </button>
+      {% else %}
+      <button class="train-btn" id="trainBtn" onclick="trainModel(true)" style="background:linear-gradient(135deg,#0f172a,#1e1b4b);">
+        <i class="bi bi-arrow-repeat me-2"></i>Retrain on Latest Data
+      </button>
+      {% endif %}
+    </div>
+
+    <!-- Progress -->
+    <div class="train-progress" id="trainProgress">
+      <div class="train-progress-bar"><div class="train-progress-fill" id="trainFill"></div></div>
+      <div class="train-log" id="trainLog">Initializing...</div>
+    </div>
+
+    <!-- Success -->
+    <div class="train-success" id="trainSuccess">
+      <strong>✅ Training complete!</strong> Model is ready —
+      <span id="successMetrics"></span>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ════════════════════════════════════════════════════════════
+     SECTION 2 — Predictor (only if model trained)
+════════════════════════════════════════════════════════════ -->
+<div id="predictorSection" {% if not model_info.is_trained %}style="display:none;"{% endif %}>
+<div class="predictor-grid">
+
+  <!-- ── Left: Input Panel ── -->
+  <div>
+    <div class="panel-card">
+      <div class="panel-header">
+        <h5><i class="bi bi-sliders me-2" style="color:var(--indigo)"></i>Input Parameters</h5>
+        <button onclick="resetSliders()" style="font-size:11px;color:var(--text-muted);background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:3px 10px;cursor:pointer;">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
+        </button>
+      </div>
+      <div class="panel-body">
+
+        <div class="slider-group">
+          <div class="slider-label">
+            <span class="slider-label-text"><i class="bi bi-calendar-check" style="color:#10b981;"></i> Attendance</span>
+            <span class="slider-value-badge badge-att" id="attVal">75</span>
+          </div>
+          <input type="range" class="form-range" id="attRange" min="0" max="100" step="1" value="75">
+          <div class="slider-range-labels"><span>0%</span><span>50%</span><span>100%</span></div>
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-label">
+            <span class="slider-label-text"><i class="bi bi-pencil-square" style="color:#3b82f6;"></i> Midterm Score</span>
+            <span class="slider-value-badge badge-mid" id="midVal">60</span>
+          </div>
+          <input type="range" class="form-range" id="midRange" min="0" max="100" step="0.5" value="60">
+          <div class="slider-range-labels"><span>0</span><span>50</span><span>100</span></div>
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-label">
+            <span class="slider-label-text"><i class="bi bi-award" style="color:#f59e0b;"></i> Previous GPA</span>
+            <span class="slider-value-badge badge-gpa" id="gpaVal">2.5</span>
+          </div>
+          <input type="range" class="form-range" id="gpaRange" min="0" max="4" step="0.1" value="2.5">
+          <div class="slider-range-labels"><span>0.0</span><span>2.0</span><span>4.0</span></div>
+        </div>
+
+        <!-- Formula weights -->
+        <div style="background:var(--surface-2);border-radius:10px;padding:14px;margin-bottom:20px;border:1px solid var(--border-soft);">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:10px;">Score Formula: Midterm×0.3 + Final×0.5 + Attendance×0.2</div>
+          <div class="impact-row">
+            <span class="impact-name">Midterm</span>
+            <div class="impact-bar-track"><div class="impact-bar-fill" style="width:30%;background:#3b82f6;"></div></div>
+            <span class="impact-pct">30%</span>
+          </div>
+          <div class="impact-row">
+            <span class="impact-name">Final</span>
+            <div class="impact-bar-track"><div class="impact-bar-fill" style="width:50%;background:var(--indigo);"></div></div>
+            <span class="impact-pct">50%</span>
+          </div>
+          <div class="impact-row" style="margin-bottom:0;">
+            <span class="impact-name">Attendance</span>
+            <div class="impact-bar-track"><div class="impact-bar-fill" style="width:20%;background:#10b981;"></div></div>
+            <span class="impact-pct">20%</span>
+          </div>
+        </div>
+
+        <button class="btn btn-primary w-100" style="padding:12px;font-size:14px;font-weight:700;border-radius:10px;" onclick="runPrediction()">
+          <i class="bi bi-cpu me-2"></i>Predict My Score
+        </button>
+      </div>
+    </div>
+
+    <!-- Model accuracy -->
+    {% if model_info.metrics %}
+    <div class="panel-card mt-3" id="modelAccCard">
+      <div class="panel-header"><h5><i class="bi bi-bar-chart-line me-2 text-secondary"></i>Model Accuracy</h5></div>
+      <div class="panel-body" style="padding:16px 20px;">
+        <div class="row g-2 text-center mb-3">
+          <div class="col-3">
+            <div class="metric-card">
+              <div class="metric-val" style="color:var(--indigo)" id="mR2">{{ model_info.metrics.r2 }}</div>
+              <div class="metric-label">R²</div>
+              <div class="metric-help">Fit quality</div>
+            </div>
+          </div>
+          <div class="col-3">
+            <div class="metric-card">
+              <div class="metric-val" id="mRMSE">{{ model_info.metrics.rmse }}</div>
+              <div class="metric-label">RMSE</div>
+              <div class="metric-help">Avg error</div>
+            </div>
+          </div>
+          <div class="col-3">
+            <div class="metric-card">
+              <div class="metric-val" id="mMAE">{{ model_info.metrics.mae }}</div>
+              <div class="metric-label">MAE</div>
+              <div class="metric-help">Mean abs err</div>
+            </div>
+          </div>
+          <div class="col-3">
+            <div class="metric-card">
+              <div class="metric-val" id="mSamples">{{ model_info.metrics.training_samples }}</div>
+              <div class="metric-label">Samples</div>
+              <div class="metric-help">Trained on</div>
+            </div>
+          </div>
+        </div>
+        {% if model_info.metrics.coefficients %}
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:8px;">Feature Weights (Coefficients)</div>
+        <div class="impact-row">
+          <span class="impact-name">Attendance</span>
+          <div class="impact-bar-track"><div class="impact-bar-fill" style="width:{{ model_info.metrics.coefficients.attendance|floatformat:0 }}%;background:#10b981;max-width:100%;"></div></div>
+          <span class="impact-pct" style="color:#10b981;">{{ model_info.metrics.coefficients.attendance }}</span>
+        </div>
+        <div class="impact-row">
+          <span class="impact-name">Midterm</span>
+          <div class="impact-bar-track"><div class="impact-bar-fill" style="width:{{ model_info.metrics.coefficients.midterm|floatformat:0 }}%;background:#3b82f6;max-width:100%;"></div></div>
+          <span class="impact-pct" style="color:#3b82f6;">{{ model_info.metrics.coefficients.midterm }}</span>
+        </div>
+        <div class="impact-row" style="margin-bottom:0;">
+          <span class="impact-name">GPA</span>
+          <div class="impact-bar-track"><div class="impact-bar-fill" style="width:{{ model_info.metrics.coefficients.previous_gpa|floatformat:0 }}%;background:#f59e0b;max-width:100%;"></div></div>
+          <span class="impact-pct" style="color:#f59e0b;">{{ model_info.metrics.coefficients.previous_gpa }}</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ── Right: Result Panel ── -->
+  <div>
+    <!-- Idle -->
+    <div id="idleState" class="panel-card">
+      <div style="text-align:center;padding:52px 32px;">
+        <div style="font-size:64px;margin-bottom:16px;">🎯</div>
+        <h3 style="font-weight:800;font-size:20px;color:var(--text-primary);">Ready to Predict</h3>
+        <p style="color:var(--text-muted);font-size:13.5px;max-width:340px;margin:0 auto 24px;">Adjust the sliders to match your situation, then hit <strong>Predict My Score</strong>.</p>
+        <div class="row g-3" style="max-width:400px;margin:0 auto;">
+          <div class="col-4">
+            <div style="background:rgba(16,185,129,.08);border-radius:10px;padding:12px;border:1px solid rgba(16,185,129,.15);">
+              <div style="font-size:22px;">📅</div>
+              <div style="font-size:11px;color:#059669;font-weight:700;margin-top:6px;">Attendance</div>
+              <div style="font-size:10px;color:var(--text-muted);">20% of total</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div style="background:rgba(59,130,246,.08);border-radius:10px;padding:12px;border:1px solid rgba(59,130,246,.15);">
+              <div style="font-size:22px;">📝</div>
+              <div style="font-size:11px;color:#2563eb;font-weight:700;margin-top:6px;">Midterm</div>
+              <div style="font-size:10px;color:var(--text-muted);">30% of total</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div style="background:rgba(99,102,241,.08);border-radius:10px;padding:12px;border:1px solid rgba(99,102,241,.15);">
+              <div style="font-size:22px;">🏁</div>
+              <div style="font-size:11px;color:var(--indigo);font-weight:700;margin-top:6px;">Final</div>
+              <div style="font-size:10px;color:var(--text-muted);">50% of total</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Result (shown after predict) -->
+    <div id="resultState" style="display:none;">
+      <div class="panel-card mb-4">
+        <div class="result-hero">
+          <div class="gauge-wrap">
+            <canvas id="gaugeCanvas" width="220" height="120"></canvas>
+            <div class="gauge-text">
+              <div class="gauge-score" id="gaugeScore">—</div>
+              <div class="gauge-label">Predicted Final</div>
+            </div>
+          </div>
+          <div class="letter-grade grade-B mt-3" id="letterGrade">B</div>
+          <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;" id="gradeDesc">—</div>
+          <div class="risk-banner risk-safe mx-auto" style="max-width:320px;" id="riskBanner">
+            <i class="bi bi-check-circle-fill"></i>
+            <span id="riskText">—</span>
+          </div>
+        </div>
+        <div>
+          <div class="breakdown-row">
+            <span class="breakdown-label"><i class="bi bi-pencil-square" style="color:#3b82f6;"></i> Midterm Score</span>
+            <div class="text-end"><div class="breakdown-val" id="bdMidterm">—</div><div class="breakdown-contribution" id="bdMidtermContrib">—</div></div>
+          </div>
+          <div class="breakdown-row">
+            <span class="breakdown-label"><i class="bi bi-cpu" style="color:var(--indigo);"></i> Predicted Final</span>
+            <div class="text-end"><div class="breakdown-val" id="bdFinal">—</div><div class="breakdown-contribution" id="bdFinalContrib">—</div></div>
+          </div>
+          <div class="breakdown-row">
+            <span class="breakdown-label"><i class="bi bi-calendar-check" style="color:#10b981;"></i> Attendance</span>
+            <div class="text-end"><div class="breakdown-val" id="bdAtt">—</div><div class="breakdown-contribution" id="bdAttContrib">—</div></div>
+          </div>
+          <div class="breakdown-row breakdown-total">
+            <span class="breakdown-label"><i class="bi bi-trophy-fill" style="color:#f59e0b;"></i> Total Score</span>
+            <div class="breakdown-val" id="bdTotal">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-4">
+        <div class="col-12 col-xl-7">
+          <div class="panel-card">
+            <div class="panel-header"><h5><i class="bi bi-bar-chart-fill me-2" style="color:var(--indigo);"></i>Score Breakdown</h5></div>
+            <div class="panel-body"><canvas id="predChart" height="160"></canvas></div>
+          </div>
+        </div>
+        <div class="col-12 col-xl-5">
+          <div class="panel-card h-100">
+            <div class="panel-header"><h5><i class="bi bi-lightbulb-fill me-2" style="color:#f59e0b;"></i>Smart Recommendations</h5></div>
+            <div class="panel-body" id="tipsPanel"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-card mt-4">
+        <div class="panel-header"><h5><i class="bi bi-table me-2" style="color:#10b981;"></i>What-if Scenarios</h5></div>
+        <div style="overflow-x:auto;">
+          <table class="table whatif-table mb-0">
+            <thead>
+              <tr>
+                <th>Scenario</th><th>Attendance</th><th>Midterm</th><th>GPA</th>
+                <th>Pred. Final</th><th>Total Score</th><th>Grade</th>
+              </tr>
+            </thead>
+            <tbody id="whatifBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div><!-- /predictorSection -->
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const TRAIN_URL  = "{% url 'dashboard:train_ml' %}";
+const PREDICT_URL = "{% url 'dashboard:predict' %}";
+const STATUS_URL = "{% url 'dashboard:ml_status' %}";
+const CSRF = "{{ csrf_token }}";
+const IS_ADMIN = "{{ user.role }}" === "admin";
+
+/* ── Slider bindings ─────────────────────────────────────────── */
+function bind(rangeId, valId, fmt) {
+  const r = document.getElementById(rangeId);
+  if (!r) return;
+  r.addEventListener('input', () => { document.getElementById(valId).textContent = fmt(r.value); });
+}
+bind('attRange', 'attVal', v => Math.round(v));
+bind('midRange', 'midVal', v => parseFloat(v).toFixed(1));
+bind('gpaRange', 'gpaVal', v => parseFloat(v).toFixed(1));
+
+function resetSliders() {
+  document.getElementById('attRange').value = 75;
+  document.getElementById('midRange').value = 60;
+  document.getElementById('gpaRange').value = 2.5;
+  document.getElementById('attVal').textContent = '75';
+  document.getElementById('midVal').textContent = '60.0';
+  document.getElementById('gpaVal').textContent = '2.5';
+}
+
+/* ── Train Model ─────────────────────────────────────────────── */
+async function trainModel(retrain) {
+  const btn = document.getElementById('trainBtn');
+  const progress = document.getElementById('trainProgress');
+  const fill = document.getElementById('trainFill');
+  const log = document.getElementById('trainLog');
+  const success = document.getElementById('trainSuccess');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Training...';
+  progress.style.display = 'block';
+  success.style.display = 'none';
+
+  // Animate progress bar
+  const logs = [
+    [10, 'Loading grade data from database...'],
+    [30, 'Computing student GPA scores...'],
+    [55, 'Fitting Linear Regression model...'],
+    [75, 'Evaluating on test split (80/20)...'],
+    [90, 'Saving model to disk...'],
+  ];
+  let i = 0;
+  const ticker = setInterval(() => {
+    if (i < logs.length) { fill.style.width = logs[i][0] + '%'; log.textContent = logs[i][1]; i++; }
+  }, 400);
+
+  try {
+    const fd = new FormData();
+    fd.append('csrfmiddlewaretoken', CSRF);
+    fd.append('retrain', retrain ? '1' : '0');
+    const res = await fetch(TRAIN_URL, { method: 'POST', body: fd });
+    const data = await res.json();
+
+    clearInterval(ticker);
+    fill.style.width = '100%';
+    log.textContent = 'Done!';
+
+    if (data.error) {
+      log.textContent = 'Error: ' + data.error;
+      fill.style.background = '#ef4444';
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-arrow-repeat me-2"></i>Retry Training';
+      return;
+    }
+
+    // Show success
+    const m = data.metrics || {};
+    document.getElementById('successMetrics').textContent =
+      `R² ${m.r2 || '—'} · RMSE ${m.rmse || '—'} · ${m.training_samples || '—'} samples`;
+    success.style.display = 'block';
+
+    // Update stats display
+    if (m.training_samples) document.getElementById('statGrades').textContent = m.training_samples;
+    if (m.r2) document.getElementById('statR2').textContent = m.r2;
+    if (m.rmse) document.getElementById('statRMSE').textContent = m.rmse;
+
+    // Update header badges
+    document.getElementById('statusBadges').innerHTML =
+      `<span class="model-badge model-badge-trained"><i class="bi bi-check-circle-fill"></i> Model Ready</span>
+       <span class="model-badge" style="background:rgba(99,102,241,.1);color:var(--indigo);border:1px solid rgba(99,102,241,.2);">R² ${m.r2 || ''}</span>`;
+
+    // Show predictor section
+    document.getElementById('predictorSection').style.display = 'block';
+    updateModelAccCard(m);
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-arrow-repeat me-2"></i>Retrain on Latest Data';
+    document.getElementById('trainTitle').textContent = 'Retrain ML Model';
+    document.getElementById('trainDesc').textContent = 'Model is trained and active. Retrain anytime to refresh on the latest data.';
+
+  } catch (e) {
+    clearInterval(ticker);
+    log.textContent = 'Network error: ' + e.message;
+    fill.style.background = '#ef4444';
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-arrow-repeat me-2"></i>Retry';
+  }
+}
+
+function updateModelAccCard(m) {
+  const card = document.getElementById('modelAccCard');
+  if (!card) return;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('mR2', m.r2 || '—'); set('mRMSE', m.rmse || '—');
+  set('mMAE', m.mae || '—'); set('mSamples', m.training_samples || '—');
+}
+
+/* ── Prediction ──────────────────────────────────────────────── */
+function scoreToLetter(s) {
+  if (s >= 90) return 'A'; if (s >= 80) return 'B';
+  if (s >= 70) return 'C'; if (s >= 60) return 'D'; return 'F';
+}
+function letterDesc(l) {
+  return {A:'Excellent!',B:'Good performance',C:'Average — room to improve',D:'Below average',F:'Failing — urgent action!'}[l];
+}
+function scoreColor(s) {
+  if (s >= 70) return '#10b981'; if (s >= 50) return '#f59e0b'; return '#ef4444';
+}
+
+let predChart = null;
+const gaugeCanvas = document.getElementById('gaugeCanvas');
+const gCtx = gaugeCanvas ? gaugeCanvas.getContext('2d') : null;
+
+function drawGauge(score) {
+  if (!gCtx) return;
+  const w=220, h=120, cx=w/2, cy=h-10, r=88;
+  gCtx.clearRect(0,0,w,h);
+  const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+  const trackColor = isDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.07)';
+
+  gCtx.beginPath(); gCtx.arc(cx,cy,r,Math.PI,2*Math.PI);
+  gCtx.strokeStyle = trackColor; gCtx.lineWidth=14; gCtx.lineCap='round'; gCtx.stroke();
+
+  const pct = Math.max(0,Math.min(1,score/100));
+  const color = scoreColor(score);
+  gCtx.beginPath(); gCtx.arc(cx,cy,r,Math.PI,Math.PI+pct*Math.PI);
+  gCtx.strokeStyle = color; gCtx.lineWidth=14; gCtx.lineCap='round'; gCtx.stroke();
+}
+
+async function runPrediction() {
+  const att = parseFloat(document.getElementById('attRange').value);
+  const mid = parseFloat(document.getElementById('midRange').value);
+  const gpa = parseFloat(document.getElementById('gpaRange').value);
+
+  const btn = event.currentTarget;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Predicting...';
+  btn.disabled = true;
+
+  try {
+    const fd = new FormData();
+    fd.append('csrfmiddlewaretoken', CSRF);
+    fd.append('attendance', att);
+    fd.append('midterm', mid);
+    fd.append('previous_gpa', gpa);
+    fd.append('ajax', '1');
+
+    const res = await fetch(PREDICT_URL, { method: 'POST', body: fd });
+    const data = await res.json();
+
+    if (data.error) { alert('Error: ' + data.error); return; }
+    renderResult(data, att, mid, gpa);
+  } catch (e) {
+    alert('Prediction failed: ' + e.message);
+  } finally {
+    btn.innerHTML = '<i class="bi bi-cpu me-2"></i>Predict My Score';
+    btn.disabled = false;
+  }
+}
+
+function renderResult(p, att, mid, gpa) {
+  document.getElementById('idleState').style.display = 'none';
+  document.getElementById('resultState').style.display = 'block';
+
+  const fin = p.predicted_final, total = p.predicted_total_score;
+  const letter = scoreToLetter(total), color = scoreColor(fin);
+
+  drawGauge(fin);
+  const gs = document.getElementById('gaugeScore');
+  gs.textContent = fin; gs.style.color = color;
+
+  const lg = document.getElementById('letterGrade');
+  lg.textContent = letter;
+  lg.className = 'letter-grade grade-' + letter + ' mt-3';
+  document.getElementById('gradeDesc').textContent = letterDesc(letter);
+
+  const rb = document.getElementById('riskBanner');
+  rb.className = 'risk-banner risk-' + p.risk_level + ' mx-auto';
+  rb.style.maxWidth = '320px';
+  document.getElementById('riskText').textContent = {
+    safe: '✅ On Track — Keep up the great work!',
+    borderline: '⚡ Borderline — Push harder to level up',
+    at_risk: '⚠️ At Risk — Immediate action needed!'
+  }[p.risk_level] || '';
+
+  document.getElementById('bdMidterm').textContent = mid;
+  document.getElementById('bdMidtermContrib').textContent = (mid*0.3).toFixed(1) + ' pts (×0.3)';
+  document.getElementById('bdFinal').textContent = fin;
+  document.getElementById('bdFinalContrib').textContent = (fin*0.5).toFixed(1) + ' pts (×0.5)';
+  document.getElementById('bdAtt').textContent = att + '%';
+  document.getElementById('bdAttContrib').textContent = (att*0.2).toFixed(1) + ' pts (×0.2)';
+  document.getElementById('bdTotal').textContent = total;
+
+  if (predChart) predChart.destroy();
+  predChart = new Chart(document.getElementById('predChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Attendance', 'Midterm', 'Predicted Final', 'Total Score'],
+      datasets: [{
+        data: [att, mid, fin, total],
+        backgroundColor: ['rgba(16,185,129,.7)','rgba(59,130,246,.7)',scoreColor(fin).replace(')',', .7)').replace('rgb','rgba'),'rgba(139,92,246,.7)'],
+        borderRadius: 8, borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true, animation: { duration: 600 },
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, max: 100, grid: { color: 'rgba(148,163,184,.12)' }, ticks: { font: { size: 11 } } },
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+
+  const tips = [];
+  if (att < 75) tips.push({cls:'danger',icon:'bi-calendar-x-fill',text:`Attendance ${att}% is below 75%. Each skipped class reduces your total by 0.2 pts.`});
+  if (mid < 50) tips.push({cls:'danger',icon:'bi-exclamation-triangle-fill',text:`Midterm score ${mid} is below 50. Seek tutoring and extra practice immediately.`});
+  if (p.risk_level === 'at_risk') tips.push({cls:'danger',icon:'bi-fire',text:'Predicted to fail. Talk to your teacher about a recovery plan now.'});
+  if (att >= 90) tips.push({cls:'success',icon:'bi-calendar-check-fill',text:`Great attendance (${att}%)! You are maximizing your 20% attendance contribution.`});
+  if (mid >= 80) tips.push({cls:'success',icon:'bi-star-fill',text:`Excellent midterm (${mid})! Keep this momentum for the final.`});
+  if (fin < 70 && fin >= 50) tips.push({cls:'warning',icon:'bi-lightbulb-fill',text:'A 10-point improvement in your final could move you up a letter grade. Focus on past papers.'});
+  if (total >= 90) tips.push({cls:'success',icon:'bi-trophy-fill',text:'Outstanding! You are on track for an A. Consistency is key.'});
+  if (!tips.length) tips.push({cls:'success',icon:'bi-check-circle-fill',text:'Your inputs look balanced. Keep consistent effort across all areas.'});
+
+  document.getElementById('tipsPanel').innerHTML = tips.map(t =>
+    `<div class="tip-item tip-${t.cls}"><i class="bi ${t.icon}" style="font-size:14px;margin-top:1px;flex-shrink:0;color:${t.cls==='success'?'#10b981':t.cls==='warning'?'#f59e0b':'#ef4444'}"></i><span>${t.text}</span></div>`
+  ).join('');
+
+  const currentFin = fin;
+  const currentAtt = att;
+  const scenarios = [
+    {label:'📍 Current',       att,                      mid,                          gpa},
+    {label:'📅 Max Attendance', att:100,                  mid,                          gpa},
+    {label:'📝 +10 Midterm',    att,                      mid:Math.min(100,mid+10),     gpa},
+    {label:'⬆️ +0.5 GPA',       att,                      mid,                          gpa:Math.min(4,gpa+0.5)},
+    {label:'🏆 Best Case',       att:100,                  mid:Math.min(100,mid+10),     gpa:Math.min(4,gpa+0.5)},
+    {label:'📉 Worst Case',      att:Math.max(0,att-20),  mid:Math.max(0,mid-15),       gpa},
+  ];
+
+  document.getElementById('whatifBody').innerHTML = scenarios.map(s => {
+    const wFin = Math.round(Math.max(0, Math.min(100, currentFin + (s.att-att)*0.15 + (s.mid-mid)*0.45 + (s.gpa-gpa)*5)) * 10) / 10;
+    const wTotal = parseFloat((s.mid*0.3 + wFin*0.5 + s.att*0.2).toFixed(1));
+    const wLetter = scoreToLetter(wTotal);
+    const wColor = scoreColor(wFin);
+    const highlight = s.att===att && s.mid===mid && s.gpa===gpa ? 'background:var(--surface-2);font-weight:600;' : '';
+    return `<tr style="${highlight}">
+      <td style="font-weight:600;">${s.label}</td>
+      <td>${s.att}%</td><td>${s.mid}</td><td>${parseFloat(s.gpa).toFixed(1)}</td>
+      <td style="color:${wColor};font-weight:700;">${wFin}</td>
+      <td style="font-weight:700;">${wTotal}</td>
+      <td><span style="background:${wColor}20;color:${wColor};border:1px solid ${wColor}40;font-size:12px;padding:3px 9px;border-radius:6px;font-weight:700;">${wLetter}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+/* Prefill for student */
+{% if prefill %}
+document.getElementById('attRange').value = {{ prefill.attendance|default:75 }};
+document.getElementById('midRange').value = {{ prefill.midterm|default:60 }};
+document.getElementById('gpaRange').value = {{ prefill.previous_gpa|default:2.5 }};
+document.getElementById('attVal').textContent = Math.round({{ prefill.attendance|default:75 }});
+document.getElementById('midVal').textContent = parseFloat('{{ prefill.midterm|default:60 }}').toFixed(1);
+document.getElementById('gpaVal').textContent = parseFloat('{{ prefill.previous_gpa|default:2.5 }}').toFixed(1);
+{% endif %}
+</script>
+{% endblock %}
